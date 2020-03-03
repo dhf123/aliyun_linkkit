@@ -4,30 +4,58 @@
  * HAL_TCP_xxx API reference implementation: wrappers/os/ubuntu/HAL_TCP_linux.c
  *
  */
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
+#include <memory.h>
+
+#include <pthread.h>
+#include <unistd.h>
+#include <sys/prctl.h>
+#include <sys/time.h>
+#include <semaphore.h>
+#include <errno.h>
+#include <assert.h>
+#include <net/if.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/ioctl.h>
+#include <sys/reboot.h>
+#include <time.h>
+#include <signal.h>
+
+#include <sys/types.h>
+#include <fcntl.h>
+#include <netinet/tcp.h>
+#include <netdb.h>
+
 #include "infra_types.h"
 #include "infra_defs.h"
 #include "infra_compat.h"
 #include "wrappers_defs.h"
-#include "stdarg.h"
 
-/**
- *
- * 函数 HAL_Free() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_Free() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_Free(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_Free, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
+#ifdef DYNAMIC_REGISTER
+    char _product_key[IOTX_PRODUCT_KEY_LEN + 1]       = "a1PjZnfsb4e";
+    char _product_secret[IOTX_PRODUCT_SECRET_LEN + 1] = "ZkcdCGPBTkzLbcdt";
+    char _device_name[IOTX_DEVICE_NAME_LEN + 1]       = "developerkit_01";
+    char _device_secret[IOTX_DEVICE_SECRET_LEN + 1]   = "";
+#else
+    #ifdef DEVICE_MODEL_ENABLED
+        char _product_key[IOTX_PRODUCT_KEY_LEN + 1]       = "a1PjZnfsb4e";
+        char _product_secret[IOTX_PRODUCT_SECRET_LEN + 1] = "ZkcdCGPBTkzLbcdt";
+        char _device_name[IOTX_DEVICE_NAME_LEN + 1]       = "developerkit_01";
+        char _device_secret[IOTX_DEVICE_SECRET_LEN + 1]   = "3VdiUXrXwDidMUGF8VdRp3MOHb9RLHJJ";
+    #else
+        char _product_key[IOTX_PRODUCT_KEY_LEN + 1]       = "a1PjZnfsb4e";
+        char _product_secret[IOTX_PRODUCT_SECRET_LEN + 1] = "ZkcdCGPBTkzLbcdt";
+        char _device_name[IOTX_DEVICE_NAME_LEN + 1]       = "developerkit_01";
+        char _device_secret[IOTX_DEVICE_SECRET_LEN + 1]   = "3VdiUXrXwDidMUGF8VdRp3MOHb9RLHJJ";
+    #endif
+#endif
+
+
 /**
  * @brief Deallocate memory block
  *
@@ -38,28 +66,10 @@
  */
 void HAL_Free(void *ptr)
 {
-	return;
+	free(ptr);
 }
 
 
-/**
- *
- * 函数 HAL_GetDeviceName() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_GetDeviceName() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_GetDeviceName(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_GetDeviceName, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 /**
  * @brief Get device name from user's system persistent storage
  *
@@ -68,28 +78,15 @@ void HAL_Free(void *ptr)
  */
 int HAL_GetDeviceName(char device_name[IOTX_DEVICE_NAME_LEN + 1])
 {
-	return (int)1;
+    int len = strlen(_device_name);
+    memset(device_name, 0x0, IOTX_DEVICE_NAME_LEN + 1);
+
+    strncpy(device_name, _device_name, len);
+
+    return strlen(device_name);
 }
 
 
-/**
- *
- * 函数 HAL_GetDeviceSecret() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_GetDeviceSecret() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_GetDeviceSecret(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_GetDeviceSecret, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 /**
  * @brief Get device secret from user's system persistent storage
  *
@@ -98,28 +95,14 @@ int HAL_GetDeviceName(char device_name[IOTX_DEVICE_NAME_LEN + 1])
  */
 int HAL_GetDeviceSecret(char device_secret[IOTX_DEVICE_SECRET_LEN + 1])
 {
-	return (int)1;
+    int len = strlen(_device_secret);
+    memset(device_secret, 0x0, IOTX_DEVICE_SECRET_LEN + 1);
+
+    strncpy(device_secret, _device_secret, len);
+
+    return len;
 }
 
-
-/**
- *
- * 函数 HAL_GetFirmwareVersion() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_GetFirmwareVersion() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_GetFirmwareVersion(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_GetFirmwareVersion, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 /**
  * @brief Get firmware version
  *
@@ -128,28 +111,15 @@ int HAL_GetDeviceSecret(char device_secret[IOTX_DEVICE_SECRET_LEN + 1])
  */
 int HAL_GetFirmwareVersion(char *version)
 {
-	return (int)1;
+    char *ver = "app-1.0.0-20180101.1000";
+    int len = strlen(ver);
+    memset(version, 0x0, IOTX_FIRMWARE_VER_LEN);
+    strncpy(version, ver, IOTX_FIRMWARE_VER_LEN);
+    version[len] = '\0';
+    return strlen(version);
 }
 
 
-/**
- *
- * 函数 HAL_GetProductKey() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_GetProductKey() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_GetProductKey(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_GetProductKey, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 /**
  * @brief Get product key from user's system persistent storage
  *
@@ -158,52 +128,27 @@ int HAL_GetFirmwareVersion(char *version)
  */
 int HAL_GetProductKey(char product_key[IOTX_PRODUCT_KEY_LEN + 1])
 {
-	return (int)1;
+    int len = strlen(_product_key);
+    memset(product_key, 0x0, IOTX_PRODUCT_KEY_LEN + 1);
+
+    strncpy(product_key, _product_key, len);
+
+    return len;
 }
 
 
-/**
- *
- * 函数 HAL_GetProductSecret() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_GetProductSecret() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_GetProductSecret(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_GetProductSecret, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 int HAL_GetProductSecret(char product_secret[IOTX_PRODUCT_SECRET_LEN + 1])
 {
-	return (int)1;
+    int len = strlen(_product_secret);
+    memset(product_secret, 0x0, IOTX_PRODUCT_SECRET_LEN + 1);
+
+    strncpy(product_secret, _product_secret, len);
+
+    return len;
 }
 
 
-/**
- *
- * 函数 HAL_Malloc() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_Malloc() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_Malloc(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_Malloc, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
+
 /**
  * @brief Allocates a block of size bytes of memory, returning a pointer to the beginning of the block.
  *
@@ -214,28 +159,11 @@ int HAL_GetProductSecret(char product_secret[IOTX_PRODUCT_SECRET_LEN + 1])
  */
 void *HAL_Malloc(uint32_t size)
 {
-	return (void*)1;
+	return malloc(size);
 }
 
 
-/**
- *
- * 函数 HAL_MutexCreate() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_MutexCreate() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_MutexCreate(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_MutexCreate, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
+
 /**
  * @brief Create a mutex.
  *
@@ -246,28 +174,22 @@ void *HAL_Malloc(uint32_t size)
  */
 void *HAL_MutexCreate(void)
 {
-	return (void*)1;
+	int err_num;
+    pthread_mutex_t *mutex = (pthread_mutex_t *)HAL_Malloc(sizeof(pthread_mutex_t));
+    if (NULL == mutex) {
+        return NULL;
+    }
+
+    if (0 != (err_num = pthread_mutex_init(mutex, NULL))) {
+        printf("create mutex failed\n");
+        HAL_Free(mutex);
+        return NULL;
+    }
+
+    return mutex;
 }
 
 
-/**
- *
- * 函数 HAL_MutexDestroy() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_MutexDestroy() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_MutexDestroy(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_MutexDestroy, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 /**
  * @brief Destroy the specified mutex object, it will release related resource.
  *
@@ -278,28 +200,20 @@ void *HAL_MutexCreate(void)
  */
 void HAL_MutexDestroy(void *mutex)
 {
-	return;
+	int err_num;
+
+    if (!mutex) {
+        printf("mutex want to destroy is NULL!\n");
+        return;
+    }
+    if (0 != (err_num = pthread_mutex_destroy((pthread_mutex_t *)mutex))) {
+        printf("destroy mutex failed\n");
+    }
+
+    HAL_Free(mutex);
 }
 
 
-/**
- *
- * 函数 HAL_MutexLock() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_MutexLock() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_MutexLock(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_MutexLock, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 /**
  * @brief Waits until the specified mutex is in the signaled state.
  *
@@ -310,28 +224,13 @@ void HAL_MutexDestroy(void *mutex)
  */
 void HAL_MutexLock(void *mutex)
 {
-	return;
+	int err_num;
+    if (0 != (err_num = pthread_mutex_lock((pthread_mutex_t *)mutex))) {
+        printf("lock mutex failed: - '%s' (%d)\n", strerror(err_num), err_num);
+    }
 }
 
 
-/**
- *
- * 函数 HAL_MutexUnlock() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_MutexUnlock() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_MutexUnlock(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_MutexUnlock, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 /**
  * @brief Releases ownership of the specified mutex object..
  *
@@ -342,28 +241,14 @@ void HAL_MutexLock(void *mutex)
  */
 void HAL_MutexUnlock(void *mutex)
 {
-	return;
+	int err_num;
+    if (0 != (err_num = pthread_mutex_unlock((pthread_mutex_t *)mutex))) {
+        printf("unlock mutex failed - '%s' (%d)\n", strerror(err_num), err_num);
+    }
 }
 
 
-/**
- *
- * 函数 HAL_Printf() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_Printf() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_Printf(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_Printf, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
+
 /**
  * @brief Writes formatted data to stream.
  *
@@ -376,148 +261,95 @@ void HAL_MutexUnlock(void *mutex)
  */
 void HAL_Printf(const char *fmt, ...)
 {
-	return;
+	va_list args;
+
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+
+    fflush(stdout);
 }
 
 
-/**
- *
- * 函数 HAL_Random() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_Random() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_Random(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_Random, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
+
 uint32_t HAL_Random(uint32_t region)
 {
-	return (uint32_t)1;
+	FILE *handle;
+    ssize_t ret = 0;
+    uint32_t output = 0;
+    handle = fopen("/dev/urandom", "r");
+    if (handle == NULL) {
+        printf("open /dev/urandom failed\n");
+        return 0;
+    }
+    ret = fread(&output, sizeof(uint32_t), 1, handle);
+    if (ret != 1) {
+        printf("fread error: %d\n", (int)ret);
+        fclose(handle);
+        return 0;
+    }
+    fclose(handle);
+    return (region > 0) ? (output % region) : 0;
 }
 
 
-/**
- *
- * 函数 HAL_SetDeviceName() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_SetDeviceName() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_SetDeviceName(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_SetDeviceName, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 int HAL_SetDeviceName(char *device_name)
 {
-	return (int)1;
+	int len = strlen(device_name);
+
+    if (len > IOTX_DEVICE_NAME_LEN) {
+        return -1;
+    }
+    memset(_device_name, 0x0, IOTX_DEVICE_NAME_LEN + 1);
+    strncpy(_device_name, device_name, len);
+
+    return len;
 }
 
 
-/**
- *
- * 函数 HAL_SetDeviceSecret() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_SetDeviceSecret() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_SetDeviceSecret(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_SetDeviceSecret, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
+
 int HAL_SetDeviceSecret(char *device_secret)
 {
-	return (int)1;
+	int len = strlen(device_secret);
+
+    if (len > IOTX_DEVICE_SECRET_LEN) {
+        return -1;
+    }
+    memset(_device_secret, 0x0, IOTX_DEVICE_SECRET_LEN + 1);
+    strncpy(_device_secret, device_secret, len);
+
+    return len;
 }
 
 
-/**
- *
- * 函数 HAL_SetProductKey() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_SetProductKey() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_SetProductKey(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_SetProductKey, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 int HAL_SetProductKey(char *product_key)
 {
-	return (int)1;
+	int len = strlen(product_key);
+
+    if (len > IOTX_PRODUCT_KEY_LEN) {
+        return -1;
+    }
+    memset(_product_key, 0x0, IOTX_PRODUCT_KEY_LEN + 1);
+    strncpy(_product_key, product_key, len);
+
+    return len;
 }
 
 
-/**
- *
- * 函数 HAL_SetProductSecret() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_SetProductSecret() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_SetProductSecret(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_SetProductSecret, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 int HAL_SetProductSecret(char *product_secret)
 {
-	return (int)1;
+	int len = strlen(product_secret);
+
+    if (len > IOTX_PRODUCT_SECRET_LEN) {
+        return -1;
+    }
+    memset(_product_secret, 0x0, IOTX_PRODUCT_SECRET_LEN + 1);
+    strncpy(_product_secret, product_secret, len);
+
+    return len;
 }
 
 
-/**
- *
- * 函数 HAL_SleepMs() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_SleepMs() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_SleepMs(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_SleepMs, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 /**
  * @brief Sleep thread itself.
  *
@@ -528,28 +360,11 @@ int HAL_SetProductSecret(char *product_secret)
  */
 void HAL_SleepMs(uint32_t ms)
 {
-	return;
+	usleep(1000 * ms);
 }
 
 
-/**
- *
- * 函数 HAL_Snprintf() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_Snprintf() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_Snprintf(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_Snprintf, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
+
 /**
  * @brief Writes formatted data to string.
  *
@@ -564,52 +379,24 @@ void HAL_SleepMs(uint32_t ms)
  */
 int HAL_Snprintf(char *str, const int len, const char *fmt, ...)
 {
-	return (int)1;
+	va_list args;
+    int     rc;
+
+    va_start(args, fmt);
+    rc = vsnprintf(str, len, fmt, args);
+    va_end(args);
+
+    return rc;
 }
 
 
-/**
- *
- * 函数 HAL_Srandom() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_Srandom() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_Srandom(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_Srandom, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 void HAL_Srandom(uint32_t seed)
 {
-	return;
+	srandom(seed);
 }
 
 
-/**
- *
- * 函数 HAL_TCP_Destroy() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_TCP_Destroy() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_TCP_Destroy(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_TCP_Destroy, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_TCP_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
+
 /**
  * @brief Destroy the specific TCP connection.
  *
@@ -621,28 +408,51 @@ void HAL_Srandom(uint32_t seed)
  */
 int HAL_TCP_Destroy(uintptr_t fd)
 {
-	return (int)1;
+	int rc;
+
+    /* Shutdown both send and receive operations. */
+    rc = shutdown((int) fd, 2);
+    if (0 != rc) {
+        printf("shutdown error\n");
+        return -1;
+    }
+
+    rc = close((int) fd);
+    if (0 != rc) {
+        printf("closesocket error\n");
+        return -1;
+    }
+
+    return 0;
 }
 
 
-/**
- *
- * 函数 HAL_TCP_Establish() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_TCP_Establish() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_TCP_Establish(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_TCP_Establish, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_TCP_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
+static uint64_t _linux_get_time_ms(void)
+{
+    struct timeval tv = { 0 };
+    uint64_t time_ms;
+
+    gettimeofday(&tv, NULL);
+
+    time_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+
+    return time_ms;
+}
+
+static uint64_t _linux_time_left(uint64_t t_end, uint64_t t_now)
+{
+    uint64_t t_left;
+
+    if (t_end > t_now) {
+        t_left = t_end - t_now;
+    } else {
+        t_left = 0;
+    }
+
+    return t_left;
+}
+
+
 /**
  * @brief Establish a TCP connection.
  *
@@ -655,28 +465,74 @@ int HAL_TCP_Destroy(uintptr_t fd)
  */
 uintptr_t HAL_TCP_Establish(const char *host, uint16_t port)
 {
-	return (uintptr_t)1;
+    struct addrinfo hints;
+    struct addrinfo *addrInfoList = NULL;
+    struct addrinfo *cur = NULL;
+    int fd = 0;
+    int rc = 0;
+    char service[6];
+    uint8_t dns_retry = 0;
+
+    memset(&hints, 0, sizeof(hints));
+
+    printf("establish tcp connection with server(host='%s', port=[%u])\n", host, port);
+
+    hints.ai_family = AF_INET; /* only IPv4 */
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+    sprintf(service, "%u", port);
+
+    while(dns_retry++ < 8) {
+        rc = getaddrinfo(host, service, &hints, &addrInfoList);
+        if (rc != 0) {
+            printf("getaddrinfo error[%d], res: %s, host: %s, port: %s\n", dns_retry, gai_strerror(rc), host, service);
+            sleep(1);
+            continue;
+        }else{
+            break;
+        }
+    }
+
+    if (rc != 0) {
+        printf("getaddrinfo error(%d), host = '%s', port = [%d]\n", rc, host, port);
+        return (uintptr_t)(-1);
+    }
+
+    for (cur = addrInfoList; cur != NULL; cur = cur->ai_next) {
+        if (cur->ai_family != AF_INET) {
+            printf("socket type error\n");
+            rc = -1;
+            continue;
+        }
+
+        fd = socket(cur->ai_family, cur->ai_socktype, cur->ai_protocol);
+        if (fd < 0) {
+            printf("create socket error\n");
+            rc = -1;
+            continue;
+        }
+
+        if (connect(fd, cur->ai_addr, cur->ai_addrlen) == 0) {
+            rc = fd;
+            break;
+        }
+
+        close(fd);
+        printf("connect error\n");
+        rc = -1;
+    }
+
+    if (-1 == rc) {
+        printf("fail to establish tcp\n");
+    } else {
+        printf("success to establish tcp, fd=%d\n", rc);
+    }
+    freeaddrinfo(addrInfoList);
+
+    return (uintptr_t)rc;
 }
 
 
-/**
- *
- * 函数 HAL_TCP_Read() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_TCP_Read() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_TCP_Read(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_TCP_Read, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_TCP_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 /**
  * @brief Read data from the specific TCP connection with timeout parameter.
  *        The API will return immediately if 'len' be received from the specific TCP connection.
@@ -695,28 +551,68 @@ uintptr_t HAL_TCP_Establish(const char *host, uint16_t port)
  */
 int32_t HAL_TCP_Read(uintptr_t fd, char *buf, uint32_t len, uint32_t timeout_ms)
 {
-	return (int32_t)1;
+	int ret, err_code, tcp_fd;
+    uint32_t len_recv;
+    uint64_t t_end, t_left;
+    fd_set sets;
+    struct timeval timeout;
+
+    t_end = _linux_get_time_ms() + timeout_ms;
+    len_recv = 0;
+    err_code = 0;
+
+    if (fd >= FD_SETSIZE) {
+        return -1;
+    }
+    tcp_fd = (int)fd;
+
+    do {
+        t_left = _linux_time_left(t_end, _linux_get_time_ms());
+        if (0 == t_left) {
+            break;
+        }
+        FD_ZERO(&sets);
+        FD_SET(tcp_fd, &sets);
+
+        timeout.tv_sec = t_left / 1000;
+        timeout.tv_usec = (t_left % 1000) * 1000;
+
+        ret = select(tcp_fd + 1, &sets, NULL, NULL, &timeout);
+        if (ret > 0) {
+            ret = recv(tcp_fd, buf + len_recv, len - len_recv, 0);
+            if (ret > 0) {
+                len_recv += ret;
+            } else if (0 == ret) {
+                printf("connection is closed\n");
+                err_code = -1;
+                break;
+            } else {
+                if (EINTR == errno) {
+                    continue;
+                }
+                printf("recv fail\n");
+                err_code = -2;
+                break;
+            }
+        } else if (0 == ret) {
+            break;
+        } else {
+            if (EINTR == errno) {
+                continue;
+            }
+            printf("select-recv fail\n");
+            err_code = -2;
+            break;
+        }
+    } while ((len_recv < len));
+
+    /* priority to return data bytes if any data be received from TCP connection. */
+    /* It will get error code on next calling */
+    return (0 != len_recv) ? len_recv : err_code;
 }
 
 
-/**
- *
- * 函数 HAL_TCP_Write() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_TCP_Write() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_TCP_Write(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_TCP_Write, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_TCP_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
+
 /**
  * @brief Write data into the specific TCP connection.
  *        The API will return immediately if 'len' be written into the specific TCP connection.
@@ -734,28 +630,83 @@ int32_t HAL_TCP_Read(uintptr_t fd, char *buf, uint32_t len, uint32_t timeout_ms)
  */
 int32_t HAL_TCP_Write(uintptr_t fd, const char *buf, uint32_t len, uint32_t timeout_ms)
 {
-	return (int32_t)1;
+	int ret,tcp_fd;
+    uint32_t len_sent;
+    uint64_t t_end, t_left;
+    fd_set sets;
+    int net_err = 0;
+
+    t_end = _linux_get_time_ms() + timeout_ms;
+    len_sent = 0;
+    ret = 1; /* send one time if timeout_ms is value 0 */
+
+    if (fd >= FD_SETSIZE) {
+        return -1;
+    }
+    tcp_fd = (int)fd;
+
+    do {
+        t_left = _linux_time_left(t_end, _linux_get_time_ms());
+
+        if (0 != t_left) {
+            struct timeval timeout;
+
+            FD_ZERO(&sets);
+            FD_SET(tcp_fd, &sets);
+
+            timeout.tv_sec = t_left / 1000;
+            timeout.tv_usec = (t_left % 1000) * 1000;
+
+            ret = select(tcp_fd + 1, NULL, &sets, NULL, &timeout);
+            if (ret > 0) {
+                if (0 == FD_ISSET(tcp_fd, &sets)) {
+                    printf("Should NOT arrive\n");
+                    /* If timeout in next loop, it will not sent any data */
+                    ret = 0;
+                    continue;
+                }
+            } else if (0 == ret) {
+                printf("select-write timeout %d\n", tcp_fd);
+                break;
+            } else {
+                if (EINTR == errno) {
+                    printf("EINTR be caught\n");
+                    continue;
+                }
+
+                printf("select-write fail, ret = select() = %d\n", ret);
+                net_err = 1;
+                break;
+            }
+        }
+
+        if (ret > 0) {
+            ret = send(tcp_fd, buf + len_sent, len - len_sent, 0);
+            if (ret > 0) {
+                len_sent += ret;
+            } else if (0 == ret) {
+                printf("No data be sent\n");
+            } else {
+                if (EINTR == errno) {
+                    printf("EINTR be caught\n");
+                    continue;
+                }
+
+                printf("send fail, ret = send() = %d\n", ret);
+                net_err = 1;
+                break;
+            }
+        }
+    } while (!net_err && (len_sent < len) && (_linux_time_left(t_end, _linux_get_time_ms()) > 0));
+
+    if (net_err) {
+        return -1;
+    } else {
+        return len_sent;
+    }
 }
 
 
-/**
- *
- * 函数 HAL_UptimeMs() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_UptimeMs() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_UptimeMs(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_UptimeMs, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 /**
  * @brief Retrieves the number of milliseconds that have elapsed since the system was boot.
  *
@@ -765,31 +716,19 @@ int32_t HAL_TCP_Write(uintptr_t fd, const char *buf, uint32_t len, uint32_t time
  */
 uint64_t HAL_UptimeMs(void)
 {
-	return (uint64_t)1;
+	uint64_t            time_ms;
+    struct timespec     ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    time_ms = ((uint64_t)ts.tv_sec * (uint64_t)1000) + (ts.tv_nsec / 1000 / 1000);
+
+    return time_ms;
 }
 
 
-/**
- *
- * 函数 HAL_Vsnprintf() 需要SDK的使用者针对SDK将运行的硬件平台填充实现, 供SDK调用
- * ---
- * Interface of HAL_Vsnprintf() requires to be implemented by user of SDK, according to target device platform
- *
- * 如果需要参考如何实现函数 HAL_Vsnprintf(), 可以查阅SDK移植到 Ubuntu Linux 上时的示例代码
- * ---
- * If you need guidance about how to implement HAL_Vsnprintf, you can check its reference implementation for Ubuntu platform
- *
- * https://code.aliyun.com/linkkit/c-sdk/blob/v3.0.1/wrappers/os/ubuntu/HAL_OS_linux.c
- *
- *
- * 注意! HAL_XXX() 系列的函数虽然有阿里提供的对应参考实现, 但不建议您不做任何修改/检视的应用于您的商用设备!
- * 
- * 注意! 参考示例实现仅用于解释各个 HAL_XXX() 系列函数的语义!
- * 
- */
 int HAL_Vsnprintf(char *str, const int len, const char *format, va_list ap)
 {
-	return (int)1;
+	return vsnprintf(str, len, format, ap);
 }
 
 
